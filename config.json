@@ -1,0 +1,18 @@
+{
+    "version": 0.1,
+    "params": {
+        "discount_rate": 40,
+        "search_values": [
+            "tv",
+            "laptop"
+        ],
+        "use_amazon_filters": true,
+        "amazon_filters": {
+            "p_n_deal_type/23565477011": "Ofertas del Dia",
+            "p_n_deal_type/23565478011": "Todos los descuentos"
+        },
+        "pagination_level": 3,
+        "download_df": true
+        
+    }
+}

@@ -1,0 +1,10 @@
+__pycache__/*
+__pycache__
+.env
+env
+.env/*
+logs
+logs/*
+*.log
+results_csv
+results_csv/*
