@@ -12,7 +12,10 @@
             "p_n_deal_type/23565478011": "Todos los descuentos"
         },
         "pagination_level": 3,
-        "download_df": true
-        
+        "download_df": true,
+        "chat_ids": {
+            "987129826": "luismirabal28",
+            "1756571351": "kamijes"
+        }
     }
 }

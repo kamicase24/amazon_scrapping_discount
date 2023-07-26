@@ -1,23 +1,30 @@
 import logging
-import time
-from datetime import timedelta
-import json
-import pandas as pd
 import os
+import time
+from datetime import datetime, timedelta
+
+import pandas as pd
+import pytz
 from dotenv import load_dotenv
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.common.exceptions import NoSuchElementException
-import pytz
+from selenium.webdriver.common.by import By
 
+from core.base import BASE_PATH, Base
+from core.telegram import TelegramBot
 
-
-BASE_PATH = os.path.dirname(os.path.abspath(__file__)).replace('/core', '')
-load_dotenv(BASE_PATH+'/.envs/.env')
+load_dotenv(BASE_PATH+'/.env/.env')
 
 TZ=os.getenv('TZ', 'America/Lima')
 
 def timer(func):
+    """
+    Decorador que mide el tiempo de ejecución de una función
+    Parámetros:
+    func (function): La función que se va a medir.
+    Devuelve:
+    function: Una función envoltorio que ejecuta `func` y registra el tiempo de inicio y finalización.
+    """
     def wrapper(*args, **kwargs):
         startt = time.time()
         logging.info(f'INICIA {func.__name__}')
@@ -30,50 +37,50 @@ def timer(func):
     return wrapper
 
 
+class Amazonscraping(Base):
+    """
+    Clase que implementa funciones para realizar scraping de productos en Amazon.
 
-class AmazonScrapping():
+    Atributos:
+    url (str): La URL base para realizar las búsquedas en Amazon.
+    use_amazon_filters (bool): Indica si se deben aplicar los filtros de búsqueda de Amazon (por defecto, False).
+    search_values (list): Una lista de valores de búsqueda para realizar scraping de productos.
+    amazon_filters (dict): Un diccionario que contiene los filtros de búsqueda de Amazon.
+    download_df (bool): Indica si se deben descargar los resultados en formato DataFrame (por defecto, False).
+    discount_rate (float): La tasa de descuento mínima requerida para considerar un producto como válido.
+    telegram_bot (TelegramBot): Una instancia de la clase TelegramBot para enviar mensajes de Telegram.
+    """
+
 
     def __init__(self):
+        super().__init__()
         self.url = "https://www.amazon.com.mx//s?k=" 
-        config = self.get_config()
-        params = config['params']
-        self.params = params
-        self.use_amazon_filters = params.get('use_amazon_filters', False)
-        self.search_values = params.get('search_values', [])
-        self.amazon_filters = params.get('amazon_filters', {})
-        self.download_df = params.get('download_df', False)
+        self.use_amazon_filters = self.params.get('use_amazon_filters', False)
+        self.search_values = self.params.get('search_values', [])
+        self.amazon_filters = self.params.get('amazon_filters', {})
+        self.download_df = self.params.get('download_df', False)
+        self.discount_rate = self.params.get('discount_rate')
+        self.telegram_bot = TelegramBot()
 
-
-    def get_config(self):
-        """
-        Lee y carga la configuración desde el archivo 'config.json'.
-        Returns:
-            dict: Un diccionario que contiene los datos de configuración.
-        """
-        with open(f'{BASE_PATH}/config.json', 'r') as config_file:
-            data = json.loads(config_file.read())
-        return data
-    
 
     def get_search_url(self, value:str):
         """
-        Construye la URL de búsqueda para el valor proporcionado.
-        Args:
-            value (str): El valor que se utilizará para construir la URL de búsqueda.
-        Returns:
-            str: La URL de búsqueda completa que combina la URL base con el valor proporcionado.
+        Construye y devuelve la URL de búsqueda en Amazon con el valor proporcionado.
+        Parámetros:
+        value (str): El valor de búsqueda para construir la URL.
+        Devuelve:
+        str: La URL de búsqueda completa.
         """
         return f'{self.url}{value}'
 
 
     def get_product_code(self, product_element):
         """
-        Obtiene el código del producto desde un elemento del producto.
-        Args:
-            product_element (WebElement): El elemento del producto del cual se desea obtener el código.
-        Returns:
-            str or None: El código del producto obtenido desde el atributo 'data-asin' del elemento,
-                o None si no se pudo obtener el código o ocurrió un error.
+        Obtiene el código del producto desde el elemento Web proporcionado.
+        Parámetros:
+        product_element: El elemento Web que contiene el código del producto.
+        Devuelve:
+        str: El código del producto o None si no se puede obtener.
         """
         product_code = None
         try:
@@ -87,12 +94,11 @@ class AmazonScrapping():
 
     def get_product_name(self, product_element):
         """
-        Obtiene el nombre del producto desde un elemento del producto.
-        Args:
-            product_element (WebElement): El elemento del producto del cual se desea obtener el nombre.
-        Returns:
-            str or None: El nombre del producto obtenido desde el elemento,
-                o None si no se pudo obtener el nombre o ocurrió un error.
+        Obtiene el nombre del producto desde el elemento Web proporcionado.
+        Parámetros:
+        product_element: El elemento Web que contiene el nombre del producto.
+        Devuelve:
+        str: El nombre del producto o None si no se puede obtener.
         """
         product_name = None
         try:
@@ -102,20 +108,18 @@ class AmazonScrapping():
         except Exception as e:
             logging.error('Error al obtener el nombre del producto')
             logging.error(e.msg)
-            import ipdb; ipdb.set_trace()
 
         return product_name
 
 
     def get_product_type(self, product_element):
         """
-        Obtiene el tipo de producto desde un elemento del producto.
-        Args:
-            product_element (WebElement): El elemento del producto del cual se desea obtener el tipo.
-        Returns:
-            str: El tipo de producto, que puede ser 'sponsored', 'featured' o 'standard'.
-                Si ocurre un error al obtener el tipo, se devolverá 'standard' por defecto.
-        """        
+        Obtiene el tipo de producto desde el elemento Web proporcionado.
+        Parámetros:
+        product_element: El elemento Web que contiene la información sobre el tipo de producto.
+        Devuelve:
+        str: El tipo de producto ('standard', 'sponsored', 'featured' u 'other').
+        """
         product_type = None
         try:
             sponsored_element = product_element.find_element(By.XPATH, './/div[@class="a-row a-spacing-micro"]')
@@ -130,11 +134,11 @@ class AmazonScrapping():
 
     def get_product_price(self, product_element):
         """
-        Obtiene el precio del producto desde un elemento del producto.
-        Args:
-            product_element (WebElement): El elemento del producto del cual se desea obtener el precio.
-        Returns:
-            float: El precio del producto como un valor decimal, o 0.00 si no se encuentra un precio válido.
+        Obtiene el precio del producto desde el elemento Web proporcionado.
+        Parámetros:
+        product_element: El elemento Web que contiene la información sobre el precio del producto.
+        Devuelve:
+        float: El precio del producto o None si no se puede obtener.
         """
         product_price = None
         try:
@@ -152,18 +156,17 @@ class AmazonScrapping():
         except Exception as e:
             logging.error('Error al obtener el precio del producto')
             logging.error(e.msg)
-            import ipdb; ipdb.set_trace()
 
         return product_price
 
 
     def get_product_price_list(self, product_element):
         """
-        Obtiene el precio de lista del producto desde un elemento del producto.
-        Args:
-            product_element (WebElement): El elemento del producto del cual se desea obtener el precio de lista.
-        Returns:
-            float: El precio de lista del producto como un valor decimal, o 0.00 si no se encuentra un precio válido.
+        Obtiene el precio de lista del producto desde el elemento Web proporcionado.
+        Parámetros:
+        product_element: El elemento Web que contiene la información sobre el precio de lista del producto.
+        Devuelve:
+        float: El precio de lista del producto o None si no se puede obtener.
         """
         product_price_list = None
         try:
@@ -177,18 +180,17 @@ class AmazonScrapping():
         except Exception as e:
             logging.error('Error al obtener el precio de lista del producto')
             logging.error(e)
-            import ipdb; ipdb.set_trace()
         return product_price_list
 
 
     def get_discount(self, price_list:float, price:float):
         """
-        Calcula la tasa de descuento del producto.
-        Args:
-            price_list (float): El precio de lista del producto.
-            price (float): El precio actual del producto.
-        Returns:
-            int: La tasa de descuento del producto como un porcentaje entero, o 0 si no hay descuento o si el precio de lista es cero.
+        Calcula el porcentaje de descuento para un producto dado.
+        Parámetros:
+        price_list (float): El precio de lista original del producto.
+        price (float): El precio actual del producto.
+        Devuelve:
+        int: El porcentaje de descuento, o 0 si no hay descuento.
         """
         product_discount_rate = 0
         if price_list > 0.00:
@@ -198,16 +200,31 @@ class AmazonScrapping():
 
 
     def get_product_link(self, product_element):
+        """
+        Obtiene el enlace del producto desde el elemento Web proporcionado.
+        Parámetros:
+        product_element: El elemento Web que contiene el enlace del producto.
+        Devuelve:
+        str: El enlace del producto o None si no se puede obtener.
+        """
+        product_link = None
         try:
             product_link_element = product_element.find_element(By.XPATH, './/a[@class="a-link-normal s-underline-text s-underline-link-text s-link-style a-text-normal"]')
             product_link = product_link_element.get_attribute('href')
-            return product_link
         except Exception as e:
             logging.error('Error al obtener link del producto')
-            return None
+            logging.error(e)
+        return product_link
 
 
     def get_product_data(self, driver):
+        """
+        Realiza el scraping de datos de los productos en la página web.
+        Parámetros:
+        driver: Una instancia del navegador web para interactuar con la página.
+        Devuelve:
+        dict: Un diccionario con los datos de los productos obtenidos del scraping.
+        """
         page = 1
         page_limit = self.params.get('pagination_level', 1)
         product_list = driver.find_elements(By.CSS_SELECTOR, '[data-component-type="s-search-result"]')
@@ -216,10 +233,11 @@ class AmazonScrapping():
             'name': [],
             'price': [],
             'price_list': [],
-            'discount %': [],
+            'discount': [],
             'link': [],
             'type': [],
-            'page': []
+            'page': [],
+            'sended': []
         }
         for active_page in range(page, page_limit+1):
             logging.info('='*50)
@@ -229,7 +247,10 @@ class AmazonScrapping():
             # Paginación
             if active_page > 1:
                 active_page_element = driver.find_element(By.XPATH, '//span[@class="s-pagination-item s-pagination-selected"]')
-                next_page_element = active_page_element.find_element(By.XPATH, './following-sibling::a')
+                try:
+                    next_page_element = active_page_element.find_element(By.XPATH, './following-sibling::a')
+                except Exception as e:
+                    logging.error('Error al realizar la paginación')
                 if next_page_element.text == str(active_page):
                     next_page_element.click()
                     time.sleep(8)
@@ -265,26 +286,45 @@ class AmazonScrapping():
                 product_dict['name'].append(product_name)
                 product_dict['price_list'].append(product_price_list)
                 product_dict['price'].append(product_price)
-                product_dict['discount %'].append(discount)
+                product_dict['discount'].append(discount)
                 product_dict['type'].append(product_type)
                 product_dict['link'].append(product_link)
                 product_dict['page'].append(active_page)
+                product_dict['sended'].append(False)
         return product_dict
 
 
     def get_product_df(self, product_dict:dict, filename:str):
+        """
+        Genera un DataFrame a partir del diccionario de datos de los productos.
+        Parámetros:
+        product_dict (dict): Un diccionario con los datos de los productos.
+        filename (str): El nombre del archivo para descargar los resultados.
+        Devuelve:
+        pd.DataFrame: El DataFrame generado a partir de los datos de los productos.
+        """
+        df = None
         try:
             df = pd.DataFrame(product_dict)
             if self.download_df:
                 df.to_csv(f'results/{filename}', index=False)
         except Exception as e:
-            logging.error('Error al generar DataFrame {e}')
+            logging.error(f'Error al generar DataFrame {e}')
+        return df
 
 
-    def scrapper(self, url, search_val):
+    def scraping(self, url, search_val):
+        """
+        Realiza el scraping de productos en Amazon para un valor de búsqueda dado.
+        Parámetros:
+        url (str): La URL de búsqueda en Amazon.
+        search_val (str): El valor de búsqueda para el scraping.
+        Devuelve:
+        pd.DataFrame: Un DataFrame con los datos de los productos obtenidos del scraping.
+        """
         driver = webdriver.Chrome()
         driver.get(url)
-
+        today = datetime.now(tz=pytz.timezone(TZ)).strftime('%Y-%m-%d')
         if self.use_amazon_filters:
             for key, filter in self.amazon_filters.items():
                 logging.info(f'Filtro activo: {filter} ')
@@ -299,21 +339,49 @@ class AmazonScrapping():
                     continue
 
                 product_dict = self.get_product_data(driver)
-                df = self.get_product_df(product_dict, f'{search_val}_{filter.replace(" ", "_")}_products.csv')
+                df = self.get_product_df(product_dict, f'{search_val}_{filter.replace(" ", "_")}_products_{today}.csv')
 
         else:
             product_dict = self.get_product_data(driver)
-            df = self.get_product_df(product_dict, f'{search_val}_products.csv')
+            df = self.get_product_df(product_dict, f'{search_val}_products_{today}.csv')
 
         driver.quit()
         return df
 
 
+    def process_discount(self, df:pd.DataFrame):
+        """
+        Procesa el DataFrame de productos y envía mensajes de descuento a través de Telegram.
+        Parámetros:
+        df (pd.DataFrame): El DataFrame con los datos de los productos.
+        """
+        try:
+            discount_df = df[df['discount'] >= self.discount_rate]
+        except Exception as e:
+            logging.error(e)
+        for i,row in discount_df.iterrows():
+            template = self.jinja_env.get_template('message.html')
+            message = template.render(
+                product_name=row['name'],
+                price=row.price,
+                discount=row.discount,
+                link=row.link
+            )
+            for chat_id in self.telegram_bot.chat_ids:
+                self.telegram_bot.send_message(chat_id, message, 'html')
+
+
     @timer
     def process(self):
+        """
+        Procesa los valores de búsqueda y realiza el scraping de productos en Amazon.
+        Devuelve:
+        pd.DataFrame: Un DataFrame con los datos de los productos obtenidos del scraping.
+        """
         for search_val in self.search_values:
             search_url = self.get_search_url(search_val)
             logging.info('='*50)
             logging.info(f'Valor en busqueda: {search_val}')
             logging.info('='*50)
-            self.scrapper(search_url, search_val)
+            df = self.scraping(search_url, search_val)
+            self.process_discount(df)
