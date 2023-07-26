@@ -73,7 +73,6 @@ class TelegramBot(Base):
             for r in data['result']:
                 if r.get('message', False):
                     chat_ids.update(**{str(r['message']['chat']['id']): r['message']['chat']['username']})
-            import ipdb; ipdb.set_trace()
         return chat_ids
 
 
