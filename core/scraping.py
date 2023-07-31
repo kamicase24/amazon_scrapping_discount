@@ -60,6 +60,7 @@ class Amazonscraping(Base):
         self.amazon_filters = self.params.get('amazon_filters', {})
         self.download_df = self.params.get('download_df', False)
         self.discount_rate = self.params.get('discount_rate')
+        self.tag_associates = self.params.get('tag_associates', False)
         self.telegram_bot = TelegramBot()
 
 
@@ -211,6 +212,8 @@ class Amazonscraping(Base):
         try:
             product_link_element = product_element.find_element(By.XPATH, './/a[@class="a-link-normal s-underline-text s-underline-link-text s-link-style a-text-normal"]')
             product_link = product_link_element.get_attribute('href')
+            if self.tag_associates:
+                product_link = f'{product_link}&tag={self.tag_associates}'
         except Exception as e:
             logging.error('Error al obtener link del producto')
             logging.error(e)
