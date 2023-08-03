@@ -1,6 +1,9 @@
+import json
 import logging
 import os
 import time
+import urllib
+import requests
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -62,6 +65,20 @@ class Amazonscraping(Base):
         self.discount_rate = self.params.get('discount_rate')
         self.tag_associates = self.params.get('tag_associates', False)
         self.telegram_bot = TelegramBot()
+
+
+    def send_alert(self, alert_msg, detail):
+        try:
+            template = self.jinja_env.get_template('alert.html')
+            message = template.render(
+                message=alert_msg,
+                detail=detail,
+            )
+            for alert_chat_id in self.telegram_bot.alert_chat_ids:
+                self.telegram_bot.send_message(alert_chat_id, message, 'html')
+        except Exception as e:
+            logging.error(e)
+            logging.error('Error al enviar mensaje de alerta')
 
 
     def get_search_url(self, value:str):
@@ -200,7 +217,7 @@ class Amazonscraping(Base):
         return product_discount_rate
 
 
-    def get_product_link(self, product_element):
+    def get_product_link(self, product_element, product_code):
         """
         Obtiene el enlace del producto desde el elemento Web proporcionado.
         Parámetros:
@@ -212,12 +229,43 @@ class Amazonscraping(Base):
         try:
             product_link_element = product_element.find_element(By.XPATH, './/a[@class="a-link-normal s-underline-text s-underline-link-text s-link-style a-text-normal"]')
             product_link = product_link_element.get_attribute('href')
+            product_link = f'{product_link[:product_link.index(product_code)]}{product_code}/'
             if self.tag_associates:
                 product_link = f'{product_link}&tag={self.tag_associates}'
         except Exception as e:
             logging.error('Error al obtener link del producto')
             logging.error(e)
         return product_link
+
+
+    def get_short_link(self, product_link, product_code):
+        bitly_token = os.getenv('BITLY_TOKEN')
+        bitly_group = os.getenv('BITLY_GROUP')
+        bitly_domain = os.getenv('BITLY_DOMAIN')
+        bitly_url = f'{bitly_domain}/v4/bitlinks'
+        short_link = ''
+        headers = {
+            'Content-type': 'application/json',
+            'Authorization': f'Bearer {bitly_token}'
+        }
+        data = {
+            'group_guid': bitly_group,
+            'domain': 'bit.ly',
+            'title': product_code,
+            'long_url': product_link
+        }
+        res = requests.post(bitly_url, body=json.dumps(data), headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            short_link = data['link']
+        else:
+            alert_message = 'Error al acortar el link del producto.'
+            detail = res.text
+            logging.error(detail)
+            logging.error(alert_message)
+            self.send_alert(alert_message, detail)
+
+        return short_link
 
 
     def get_product_data(self, driver):
@@ -238,6 +286,7 @@ class Amazonscraping(Base):
             'price_list': [],
             'discount': [],
             'link': [],
+            'short_link': [],
             'type': [],
             'page': [],
             'sended': []
@@ -283,7 +332,11 @@ class Amazonscraping(Base):
                 discount = self.get_discount(product_price_list, product_price)
 
                 # Link del Producto
-                product_link = self.get_product_link(product_element)
+                product_link = self.get_product_link(product_element, product_code)
+
+                # Link corto del Producto
+                # short_link = self.get_short_link(product_dict, product_code)
+                short_link = ''
 
                 product_dict['code'].append(product_code)
                 product_dict['name'].append(product_name)
@@ -292,6 +345,7 @@ class Amazonscraping(Base):
                 product_dict['discount'].append(discount)
                 product_dict['type'].append(product_type)
                 product_dict['link'].append(product_link)
+                product_dict['short_link'].append(short_link)
                 product_dict['page'].append(active_page)
                 product_dict['sended'].append(False)
         return product_dict
@@ -352,6 +406,52 @@ class Amazonscraping(Base):
         return df
 
 
+    def short_link_scraping(self, df:pd.DataFrame):
+
+        bitly_driver = webdriver.Chrome()
+        bitly_driver.get('https://bitly.com/a/sign_in')
+        cookies_button = bitly_driver.find_element(By.ID, 'onetrust-accept-btn-handler')
+        cookies_button.click()
+        time.sleep(3)
+        username_input = bitly_driver.find_element(By.XPATH, '/html/body/div[4]/form[2]/div[2]/fieldset/input[1]')
+        username_input.send_keys('jora2415@gmail.com')
+        password_input = bitly_driver.find_element(By.XPATH, '/html/body/div[4]/form[2]/div[2]/fieldset/input[2]')
+        password_input.send_keys('24115035Jo$$')
+        login_button = bitly_driver.find_element(By.XPATH, '/html/body/div[4]/form[2]/div[2]/fieldset/input[4]')
+        login_button.click()
+        time.sleep(8)
+        bitly_driver.get('https://app.bitly.com/Bn81lrjhxqh/create/')
+        for i, row in df.iterrows():
+            destination_input = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[1]/div/div[2]/div[2]/div/input')
+            destination_input.send_keys(row.link)
+
+            title_input = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[1]/div/div[4]/div/input')
+            title_input.send_keys(row['name'])
+
+            alias = ''
+            split_link = row.link.split('/')
+            if split_link[3] == 'sspa':
+                alias = row.link.split('url=%')[1].split('%')[0]
+                print(alias)
+            else:
+                alias = split_link[3]
+                print(alias)
+
+            div_domain_element = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[1]/div/div[7]/div/div/div[1]/div[1]/label/div/div')
+            time.sleep(2)
+            div_domain_element.click()
+            options_element = bitly_driver.execute_script("return arguments[0].nextElementSibling;", div_domain_element)
+            option_0_element = options_element.find_element(By.ID, 'react-select-2-option-0')
+            option_0_element.click()
+            alias_input = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[1]/div/div[7]/div/div/div[1]/div[3]/div/input')
+            alias_input.send_keys(alias)
+            create_button = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[2]/div[2]/button[2]')
+            create_button.click()
+            time.sleep(5)
+            short_link_element = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[4]/div[2]/div/div[1]/div[2]/div/div[1]/h2/a')
+            short_link = short_link_element.text
+
+
     def process_discount(self, df:pd.DataFrame):
         """
         Procesa el DataFrame de productos y envía mensajes de descuento a través de Telegram.
@@ -387,4 +487,5 @@ class Amazonscraping(Base):
             logging.info(f'Valor en busqueda: {search_val}')
             logging.info('='*50)
             df = self.scraping(search_url, search_val)
+            # df = self.short_link_scraping(df)
             self.process_discount(df)

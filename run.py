@@ -6,11 +6,12 @@ El archivo `run.py` es el punto de entrada del programa, donde se ejecuta el pro
 """
 
 from core.scraping import Amazonscraping
-from core.telegram import TelegramBot
 import logging
 import os
 from datetime import datetime
-
+import pandas as pd
+import urllib
+import requests
 
 # Configuración del registro de eventos (logging)
 NOW = datetime.now()
@@ -30,4 +31,45 @@ logging.basicConfig(
 if __name__ == '__main__':
 
     amazon_scraping = Amazonscraping()
+    
     amazon_scraping.process()
+
+    # df = pd.read_csv('results/tv_Todos_los_descuentos_products_2023-07-30.csv')
+    # amazon_scraping.short_link_scraping(df)
+    # import ipdb; ipdb.set_trace()
+
+    # bitly_token = 'cb45ddafe0e86aeaaf92079d051ff3c6361872c5'
+    # bitly_domain = 'https://api-ssl.bitly.com'
+    # bitly_endpoint = '/v4/bitlinks'
+    # bitly_url = f'{bitly_domain}{bitly_endpoint}'
+    # import json
+    # for i,row in df.iterrows():
+    #     url = row.link
+
+        
+    #     url_parse = urllib.parse.quote(url)
+    #     short_url = None
+    #     split_link = url.split('/')
+
+    #     alias = ''
+    #     if split_link[3] == 'sspa':
+    #         alias = url.split('url=%')[1].split('%')[0]
+    #         print(alias)
+    #     else:
+    #         alias = split_link[3]
+    #         print(alias)
+    #     data = {
+    #         "group_guid": "Bn81lrjhxqh",
+    #         "domain": f"bit.ly",
+    #         "title": alias,
+    #         "long_url": url,
+    #     }
+    #     headers = {
+    #         'Authorization': f'Bearer {bitly_token}',
+    #         'Content-Type': 'application/json'
+    #     }
+    #     # res = requests.get('https://api-ssl.bitly.com/v4/groups', headers=headers)
+    #     res = requests.post(bitly_url, data=json.dumps(data), headers=headers)
+    #     print(res.json())
+
+    #     import ipdb; ipdb.set_trace()

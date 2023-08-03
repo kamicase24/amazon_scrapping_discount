@@ -24,6 +24,7 @@ class TelegramBot(Base):
         self.domain = os.getenv('TELEGRAM_DOMAIN')
         self.token = os.getenv('TELEGRAM_TOKEN')
         self.chat_ids = self.params.get('chat_ids')
+        self.alert_chat_ids = self.params.get('alert_chat_ids')
 
 
     def send_message(self, chat_id:str, message:str, parse_mode=None):
