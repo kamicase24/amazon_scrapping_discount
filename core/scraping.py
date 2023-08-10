@@ -421,6 +421,7 @@ class Amazonscraping(Base):
         login_button.click()
         time.sleep(8)
         bitly_driver.get('https://app.bitly.com/Bn81lrjhxqh/create/')
+        short_links = []
         for i, row in df.iterrows():
             destination_input = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[1]/div/div[2]/div[2]/div/input')
             destination_input.send_keys(row.link)
@@ -450,6 +451,8 @@ class Amazonscraping(Base):
             time.sleep(5)
             short_link_element = bitly_driver.find_element(By.XPATH, '/html/body/div[1]/div[2]/div/div[2]/div/div[4]/div[2]/div/div[1]/div[2]/div/div[1]/h2/a')
             short_link = short_link_element.text
+            short_links.append(short_link)
+        df['short_link'] = short_links
 
 
     def process_discount(self, df:pd.DataFrame):
@@ -487,5 +490,5 @@ class Amazonscraping(Base):
             logging.info(f'Valor en busqueda: {search_val}')
             logging.info('='*50)
             df = self.scraping(search_url, search_val)
-            # df = self.short_link_scraping(df)
+            df = self.short_link_scraping(df)
             self.process_discount(df)
