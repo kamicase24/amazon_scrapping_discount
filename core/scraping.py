@@ -298,7 +298,11 @@ class Amazonscraping(Base):
 
             # Paginación
             if active_page > 1:
-                active_page_element = driver.find_element(By.XPATH, '//span[@class="s-pagination-item s-pagination-selected"]')
+                try:
+                    active_page_element = driver.find_element(By.XPATH, '//span[@class="s-pagination-item s-pagination-selected"]')
+                except NoSuchElementException as e:
+                    logging.error('No existen mas paginas')
+                    continue
                 try:
                     next_page_element = active_page_element.find_element(By.XPATH, './following-sibling::a')
                 except Exception as e:
@@ -490,5 +494,5 @@ class Amazonscraping(Base):
             logging.info(f'Valor en busqueda: {search_val}')
             logging.info('='*50)
             df = self.scraping(search_url, search_val)
-            df = self.short_link_scraping(df)
+            # df = self.short_link_scraping(df)
             self.process_discount(df)
