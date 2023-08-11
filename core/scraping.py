@@ -386,6 +386,7 @@ class Amazonscraping(Base):
         driver = webdriver.Chrome()
         driver.get(url)
         today = datetime.now(tz=pytz.timezone(TZ)).strftime('%Y-%m-%d')
+        df = None
         if self.use_amazon_filters:
             for key, filter in self.amazon_filters.items():
                 logging.info(f'Filtro activo: {filter} ')
