@@ -1,8 +1,6 @@
 pandas
 beautifulsoup4
-json
-logging
-dotenv
+python-dotenv
 requests
 jinja2
 pytz
