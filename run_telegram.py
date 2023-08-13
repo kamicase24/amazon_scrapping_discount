@@ -32,6 +32,7 @@ if __name__ == '__main__':
         ('update_chat_ids', 'Actualizar ID de Chats Privados'), 
         ('get_chat_invite_link', 'Generar Link de Invitación'),
         ('send_message', 'Enviar Mensaje'), 
+        ('get_bot_data', 'Ver información del Bot'),
     ]
 
     for i, action in enumerate(actions):

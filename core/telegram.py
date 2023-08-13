@@ -26,6 +26,15 @@ class TelegramBot(Base):
         self.chat_ids = self.params.get('chat_ids')
         self.alert_chat_ids = self.params.get('alert_chat_ids')
 
+    def get_bot_data(self):
+        endpoint = '/getMe'
+        url = f'{self.domain}{self.token}{endpoint}'
+        res = requests.get(url)
+        bot_data = {}
+        if res.ok:
+            bot_data = res.json()['result']
+        return bot_data
+
 
     def get_config_data(self):
         """
