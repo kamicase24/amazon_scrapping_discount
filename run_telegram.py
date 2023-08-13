@@ -27,12 +27,14 @@ if __name__ == '__main__':
 
     print('¿Que acción desea ejecutar?')
     actions = [
-        ('get_chat_group_ids', 'Ver los Grupos Registrados'),
         ('update_chat_group_ids', 'Actualizar ID de Grupos'), 
         ('update_chat_ids', 'Actualizar ID de Chats Privados'), 
+        ('get_chat_group_ids', 'Ver los Grupos Registrados'),
+        ('get_chat_ids', 'Ver los Chat Registrados'),
         ('get_chat_invite_link', 'Generar Link de Invitación'),
-        ('send_message', 'Enviar Mensaje'), 
+        ('ondemand_send_message', 'Enviar Mensaje'), 
         ('get_bot_data', 'Ver información del Bot'),
+        ('get_group_chat_info', 'Ver Información del Chat')
     ]
 
     for i, action in enumerate(actions):

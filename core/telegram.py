@@ -36,6 +36,29 @@ class TelegramBot(Base):
         return bot_data
 
 
+    def get_chat(self, chat_id):
+        endpoint = '/getChat'
+        url = f'{self.domain}{self.token}{endpoint}'
+        res = requests.post(url, json={'chat_id': chat_id})
+        chat_data = {}
+        if res.ok:
+            chat_data = res.json()['result']
+        return chat_data
+
+    def get_group_chat_info(self):
+        chat_group_ids = self.get_chat_group_ids()
+        chat_group_list = []
+        for i, val in enumerate(chat_group_ids.values()):
+            i += 1
+            print(f'{i}) {val["title"]} [{val["id"]}]')
+            chat_group_list.append(val)
+
+        group_index = int(input('Seleccione el chat grupo que desea ver: '))-1
+        group_id = chat_group_list[group_index]['id']
+
+        group_chat_data = self.get_chat(group_id)
+        return group_chat_data
+
     def get_config_data(self):
         """
         Obtiene los datos de configuración del archivo config.json.
@@ -57,7 +80,7 @@ class TelegramBot(Base):
         endpoint = '/getUpdates'
 
         url = f'{self.domain}{self.token}{endpoint}'
-        res = requests.get(url)
+        res = requests.get(url, json={'allowed_updates': 'message'})
         return res.status_code, res.json()
 
 
@@ -115,6 +138,13 @@ class TelegramBot(Base):
         return config_data['params'].get('chat_group_ids', {})
 
 
+    def get_chat_ids(self):
+        config_filepath = f'{BASE_PATH}/config.json'
+        with open(config_filepath, 'r') as config_file:
+            config_data = json.load(config_file)
+        return config_data['params'].get('chat_ids', {})
+
+
     def create_chat_invite_link(self, chat_id:str):
         """
         Crea un enlace de invitación para un chat.
@@ -169,6 +199,25 @@ class TelegramBot(Base):
         url = f'{self.domain}{self.token}{endpoint}'
         res = requests.post(url, data=body)
         return res.status_code, res.json()
+    
+
+    def ondemand_send_message(self):
+        group_chat_ids = self.get_chat_group_ids()
+        chat_ids = self.get_chat_ids()
+        chat_ids.update(group_chat_ids)
+        chat_ids_list = []
+        for i, chat_id in enumerate(chat_ids.values()):
+            i += 1
+            chat_name = chat_id['title'] if chat_id.get('type') == 'supergroup' else f"{chat_id['first_name']} {chat_id['last_name']}"
+            print(f'{i}) {chat_name} [{chat_id["type"]}]')
+            chat_ids_list.append(chat_id)
+        chat_index = int(input('Seleccionar el chat al cual quiere enviar mensaje: '))-1
+        selected_chat_id = chat_ids_list[chat_index]['id']
+        message = input('Mensaje: ')
+
+        self.send_message(selected_chat_id, message)
+        print('Mensaje enviado con exito.')
+
 
 
 
