@@ -371,43 +371,7 @@ class Amazonscraping(Base):
                 df.to_csv(f'results/{filename}', index=False)
         except Exception as e:
             logging.error(f'Error al generar DataFrame {e}')
-        return df
 
-
-    def scraping(self, url, search_val):
-        """
-        Realiza el scraping de productos en Amazon para un valor de búsqueda dado.
-        Parámetros:
-        url (str): La URL de búsqueda en Amazon.
-        search_val (str): El valor de búsqueda para el scraping.
-        Devuelve:
-        pd.DataFrame: Un DataFrame con los datos de los productos obtenidos del scraping.
-        """
-        driver = webdriver.Chrome()
-        driver.get(url)
-        today = datetime.now(tz=pytz.timezone(TZ)).strftime('%Y-%m-%d')
-        df = None
-        if self.use_amazon_filters:
-            for key, filter in self.amazon_filters.items():
-                logging.info(f'Filtro activo: {filter} ')
-                logging.info('='*50)
-                try:
-                    filter_element = driver.find_element(By.ID, key).find_element(By.TAG_NAME, 'a')
-                    filter_element.click()
-                    time.sleep(8)
-                except NoSuchElementException as e:
-                    logging.error(e.msg)
-                    logging.error('Filtro no encontrado')
-                    continue
-
-                product_dict = self.get_product_data(driver)
-                df = self.get_product_df(product_dict, f'{search_val}_{filter.replace(" ", "_")}_products_{today}.csv')
-
-        else:
-            product_dict = self.get_product_data(driver)
-            df = self.get_product_df(product_dict, f'{search_val}_products_{today}.csv')
-
-        driver.quit()
         return df
 
 
@@ -460,16 +424,32 @@ class Amazonscraping(Base):
         df['short_link'] = short_links
 
 
-    def process_discount(self, df:pd.DataFrame):
+    def process_discount(self, df:pd.DataFrame, filename:str):
         """
         Procesa el DataFrame de productos y envía mensajes de descuento a través de Telegram.
         Parámetros:
         df (pd.DataFrame): El DataFrame con los datos de los productos.
         """
+
         try:
             discount_df = df[df['discount'] >= self.discount_rate]
+            discount_df = discount_df.drop_duplicates(subset=['code'])
         except Exception as e:
             logging.error(e)
+
+        sended_file_path = f'sended/{filename}'
+        if not os.path.exists(sended_file_path):
+            sended_df = discount_df[['code', 'name', 'sended']].copy()
+        else:
+            sended_df = pd.read_csv(sended_file_path)
+            merged_df = sended_df.merge(discount_df[['code', 'name', 'sended']], on='code', how='right', suffixes=('', '_y'), indicator=True)
+            merged_df['name'] = merged_df['name_y'].combine_first(sended_df['name'])
+            merged_df.loc[pd.isna(merged_df['sended']), 'sended'] = merged_df['sended_y']
+            merged_df = merged_df[sended_df.columns]
+            sended_df = merged_df
+
+
+
         for i,row in discount_df.iterrows():
             template = self.jinja_env.get_template('message.html')
             message = template.render(
@@ -478,8 +458,55 @@ class Amazonscraping(Base):
                 discount=row.discount,
                 link=row.link
             )
-            for chat_id in self.telegram_bot.chat_ids:
-                self.telegram_bot.send_message(chat_id, message, 'html')
+            sdf_filter = sended_df['code']==row.code
+            if not sended_df[sdf_filter]['sended'].any():
+                for chat_id, chat_data in self.telegram_bot.get_chat_group_ids().items():
+                    self.telegram_bot.send_message(chat_id, message, 'html')
+                sended_df.loc[sdf_filter, 'sended'] = True
+        sended_df.to_csv(sended_file_path, index=False)
+
+
+    def scraping(self, url, search_val):
+        """
+        Realiza el scraping de productos en Amazon para un valor de búsqueda dado.
+        Parámetros:
+        url (str): La URL de búsqueda en Amazon.
+        search_val (str): El valor de búsqueda para el scraping.
+        Devuelve:
+        pd.DataFrame: Un DataFrame con los datos de los productos obtenidos del scraping.
+        """
+        driver = webdriver.Chrome()
+        driver.get(url)
+        today = datetime.now(tz=pytz.timezone(TZ)).strftime('%Y-%m-%d')
+        df = None
+        filename = ''
+        if self.use_amazon_filters:
+            for key, filter in self.amazon_filters.items():
+                logging.info(f'Filtro activo: {filter} ')
+                logging.info('='*50)
+                try:
+                    filter_element = driver.find_element(By.ID, key).find_element(By.TAG_NAME, 'a')
+                    filter_element.click()
+                    time.sleep(8)
+                except NoSuchElementException as e:
+                    logging.error(e.msg)
+                    logging.error('Filtro no encontrado')
+                    continue
+
+                product_dict = self.get_product_data(driver)
+                filename = f'{search_val}_{filter.replace(" ", "_")}_products_{today}.csv'
+                df = self.get_product_df(product_dict, filename)
+                # df = self.short_link_scraping(df)
+                self.process_discount(df, filename)
+
+        else:
+            product_dict = self.get_product_data(driver)
+            filename = f'{search_val}_products_{today}.csv'
+            df = self.get_product_df(product_dict, f'{search_val}_products_{today}.csv')
+            # df = self.short_link_scraping(df)
+            self.process_discount(df, filename)
+
+        driver.quit()
 
 
     @timer
@@ -494,6 +521,4 @@ class Amazonscraping(Base):
             logging.info('='*50)
             logging.info(f'Valor en busqueda: {search_val}')
             logging.info('='*50)
-            df = self.scraping(search_url, search_val)
-            # df = self.short_link_scraping(df)
-            self.process_discount(df)
+            self.scraping(search_url, search_val)
