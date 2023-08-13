@@ -1,5 +1,5 @@
 {
-    "version": 0.1,
+    "version": "0.1.5",
     "params": {
         "discount_rate": 40,
         "search_values": [
@@ -14,11 +14,25 @@
         "pagination_level": 3,
         "download_df": true,
         "chat_ids": {
-            "1756571351": "kamijes"
+            "1756571351": {
+                "id": 1756571351,
+                "first_name": ".",
+                "last_name": ".",
+                "username": "kamijes",
+                "type": "private"
+            }
+        },
+        "chat_group_ids": {
+            "-1001510277244": {
+                "id": -1001510277244,
+                "title": "AmazonScrapingBot",
+                "username": "AmazonScrapingGroup",
+                "type": "supergroup"
+            }
         },
         "alert_chat_ids": {
             "1756571351": "kamijes"
         },
-        "tag_associates": "jrojas2415mx-20" 
+        "tag_associates": "jrojas2415mx-20"
     }
 }
